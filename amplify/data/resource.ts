@@ -12,6 +12,17 @@ const schema = a.schema({
       content: a.string(),
     })
     .authorization((allow) => [allow.publicApiKey()]),
+
+    player_event: a
+    .model({
+      game_id: a.integer(),
+      player_id: a.integer(),
+      isBatting: a.boolean(),
+      result: a.string(),
+      inning: a.integer(),
+    })
+    .authorization((allow) => [allow.publicApiKey()]),
+
 });
 
 export type Schema = ClientSchema<typeof schema>;
