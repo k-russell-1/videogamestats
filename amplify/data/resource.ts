@@ -20,6 +20,7 @@ const schema = a.schema({
       isBatting: a.boolean(),
       result: a.string(),
       inning: a.integer(),
+      rbi: a.integer(),
     })
     .authorization((allow) => [allow.publicApiKey()]),
 
