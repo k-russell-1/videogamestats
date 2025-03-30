@@ -13,7 +13,7 @@ const schema = a.schema({
     })
     .authorization((allow) => [allow.publicApiKey()]),
 
-    player_event: a
+    mlbPlayerEvent: a
     .model({
       game_id: a.integer(),
       player_id: a.integer(),
