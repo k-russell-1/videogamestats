@@ -37,6 +37,16 @@ const schema = a.schema({
     })
     .authorization((allow) => [allow.publicApiKey()]),
 
+    mlbGameInfo: a
+    .model({
+      id: a.integer(),
+      user_team: a.string(),
+      opponent_team: a.string(),
+      user_score: a.integer(),
+      opponent_score: a.integer(),
+    })
+    .authorization((allow) => [allow.publicApiKey()]),
+
 });
 
 export type Schema = ClientSchema<typeof schema>;
