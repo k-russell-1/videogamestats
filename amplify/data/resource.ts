@@ -23,6 +23,20 @@ const schema = a.schema({
     })
     .authorization((allow) => [allow.publicApiKey()]),
 
+    playerId: a
+    .model({
+      id: a.integer(),
+      name: a.string(),
+    })
+    .authorization((allow) => [allow.publicApiKey()]),
+
+    mlbTeam: a
+    .model({
+      id:a.integer(),
+      name:a.string(),
+    })
+    .authorization((allow) => [allow.publicApiKey()]),
+
 });
 
 export type Schema = ClientSchema<typeof schema>;
