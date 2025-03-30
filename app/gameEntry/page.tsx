@@ -4,17 +4,24 @@ import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { generateClient } from "aws-amplify/data";
 import type { Schema } from "@/amplify/data/resource";
+import { useRouter } from "next/navigation";
 
 // Generate the client based on your schema
 const client = generateClient<Schema>();
+
+
 
 const GameEntryPageContent = () => {
   const searchParams = useSearchParams();
   const [gameData, setGameData] = useState<any>(null);
   const [selectedResult, setSelectedResult] = useState<string>("single");
+  const [selectedRbi, setSelectedRbi] = useState<number>(0);
   const [players, setPlayers] = useState<Array<{ id: number; name: string }>>([]);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState<number>(0); // Track the current player's index
   const [battingResults, setBattingResults] = useState<any[]>([]); // Store the batting results
+  const [currentInning, setCurrentInning] = useState<number>(1); // Track the current inning
+  const [userScore, setUserScore] = useState<number>(0); // User score
+  const [opponentScore, setOpponentScore] = useState<number>(0); // Opponent score
 
   useEffect(() => {
     if (searchParams) {
@@ -48,6 +55,10 @@ const GameEntryPageContent = () => {
     setSelectedResult(event.target.value);
   };
 
+  const handleRbiChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedRbi(Number(event.target.value));
+  };
+
   const handleOkClick = async () => {
     if (!gameData) return;
 
@@ -74,7 +85,8 @@ const GameEntryPageContent = () => {
         player_id: playerId,
         isBatting: true,
         result: selectedResult,
-        inning: 1, // This is hardcoded for now; modify if needed
+        inning: currentInning, // Pass the current inning
+        rbi: selectedRbi, // Pass the RBI value
       });
 
       if (!response) {
@@ -83,22 +95,77 @@ const GameEntryPageContent = () => {
 
       console.log("Event inserted successfully");
 
-      // Add the result to the battingResults array
-      setBattingResults([
-        ...battingResults,
-        { playerName, result: selectedResult },
-      ]);
+      // Prepend the result to the battingResults array
+      setBattingResults((prevResults) => {
+        const newResults = [
+          { playerName, result: selectedResult, rbi: selectedRbi, inning: currentInning },
+          ...prevResults,
+        ];
+
+        // Keep only the latest 12 rows
+        if (newResults.length > 12) {
+          newResults.pop(); // Remove the last element if there are more than 12
+        }
+
+        return newResults;
+      });
 
       // Move to the next player in the order
       const nextPlayerIndex =
-        currentPlayerIndex === gameData.order.length - 1
-          ? 0
-          : currentPlayerIndex + 1;
+        currentPlayerIndex === gameData.order.length - 1 ? 0 : currentPlayerIndex + 1;
       setCurrentPlayerIndex(nextPlayerIndex);
     } catch (error) {
       console.error("Error inserting event:", error);
     }
   };
+
+  const handleEndInning = () => {
+    setCurrentInning((prevInning) => prevInning + 1);
+  };
+
+  const router = useRouter(); // Initialize the router
+
+  const handleEndGameClick = async () => {
+    const userScore = prompt("Enter the score for the User Team:");
+    const opponentScore = prompt("Enter the score for the Opponent Team:");
+  
+    const userScoreInt = parseInt(userScore ?? "0", 10);
+    const opponentScoreInt = parseInt(opponentScore ?? "0", 10);
+  
+    const gameDataList = {
+      gameId: gameData.gameId,
+      userTeam: gameData.userTeam,
+      opponentTeam: gameData.opponentTeam,
+      userScore: userScoreInt,
+      opponentScore: opponentScoreInt,
+    };
+  
+    console.log("Uploading game results:", gameDataList);
+  
+    if (!client.models.mlbGameInfo) {
+      console.error("Error: mlbGameInfo model is undefined.");
+      return;
+    }
+  
+    try {
+      await client.models.mlbGameInfo.create({
+        id: gameDataList.gameId,
+        user_team: gameDataList.userTeam,
+        opponent_team: gameDataList.opponentTeam,
+        user_score: gameDataList.userScore,
+        opponent_score: gameDataList.opponentScore,
+      });
+  
+      alert("Game results uploaded successfully.");
+  
+      // Redirect to gameRecap page with gameId as a query parameter
+      router.push(`/gameRecap?gameId=${gameDataList.gameId}`);
+    } catch (error) {
+      console.error("Error uploading game results:", error);
+      alert("Failed to upload game results.");
+    }
+  };
+  
 
   if (!gameData) {
     return <div>Loading...</div>;
@@ -140,28 +207,70 @@ const GameEntryPageContent = () => {
             <option value="sacfly">Sac Fly</option>
             <option value="sacbunt">Sac Bunt</option>
           </select>
+          <span>RBI:</span>
+          <select value={selectedRbi} onChange={handleRbiChange}>
+            {[0, 1, 2, 3, 4].map((rbiValue) => (
+              <option key={rbiValue} value={rbiValue}>
+                {rbiValue}
+              </option>
+            ))}
+          </select>
           <button className="ok-button" onClick={handleOkClick}>
             OK
           </button>
         </div>
 
         <h3>Batting Results</h3>
-        <table>
+        <table style={{ borderSpacing: "10px", borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th>Player</th>
-              <th>Result</th>
+              <th style={{ padding: "8px 16px", textAlign: "left", backgroundColor: "#f4f4f4", fontWeight: "bold" }}>
+                Player
+              </th>
+              <th style={{ padding: "8px 16px", textAlign: "left", backgroundColor: "#f4f4f4", fontWeight: "bold" }}>
+                Result
+              </th>
+              <th style={{ padding: "8px 16px", textAlign: "left", backgroundColor: "#f4f4f4", fontWeight: "bold" }}>
+                RBI
+              </th>
+              <th style={{ padding: "8px 16px", textAlign: "left", backgroundColor: "#f4f4f4", fontWeight: "bold" }}>
+                Inning
+              </th>
             </tr>
           </thead>
           <tbody>
             {battingResults.map((result, index) => (
               <tr key={index}>
-                <td>{result.playerName}</td>
-                <td>{result.result}</td>
+                <td style={{ padding: "8px 16px", textAlign: "left" }}>{result.playerName}</td>
+                <td style={{ padding: "8px 16px", textAlign: "left" }}>{result.result}</td>
+                <td style={{ padding: "8px 16px", textAlign: "left" }}>{result.rbi}</td>
+                <td style={{ padding: "8px 16px", textAlign: "left" }}>{result.inning}</td>
               </tr>
             ))}
           </tbody>
         </table>
+
+        <button onClick={handleEndInning} style={{ marginTop: "20px" }}>
+          End Inning
+        </button>
+        <p>End Inning {currentInning}</p>
+
+        <div>
+        <button
+          onClick={handleEndGameClick}
+          style={{
+            backgroundColor: "red",
+            color: "white",
+            padding: "10px 20px",
+            border: "none",
+            cursor: "pointer",
+            fontSize: "16px",
+            marginTop: "20px",
+          }}
+        >
+          End Game
+        </button>
+      </div>
       </div>
     </main>
   );

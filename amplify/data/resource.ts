@@ -40,7 +40,7 @@ const schema = a.schema({
 
     mlbGameInfo: a
     .model({
-      id: a.integer(),
+      id: a.string(),
       user_team: a.string(),
       opponent_team: a.string(),
       user_score: a.integer(),
