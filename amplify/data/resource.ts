@@ -15,7 +15,7 @@ const schema = a.schema({
 
     mlbPlayerEvent: a
     .model({
-      game_id: a.integer(),
+      game_id: a.string(),
       player_id: a.integer(),
       isBatting: a.boolean(),
       result: a.string(),
