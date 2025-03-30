@@ -35,7 +35,7 @@ export default function App() {
 
   function startGame() {
     const gameId = Math.floor(Math.random() * 100000000); // Generate random game ID
-    router.push(`/game/${gameId}`); // Redirect to game page
+    router.push(`/game`); // Redirect to game page
   }
 
   return (
