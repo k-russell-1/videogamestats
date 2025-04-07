@@ -21,6 +21,7 @@ const schema = a.schema({
       result: a.string(),
       inning: a.integer(),
       rbi: a.integer(),
+      player_name: a.string(),
     })
     .authorization((allow) => [allow.publicApiKey()]),
 
@@ -28,10 +29,19 @@ const schema = a.schema({
     .model({
       id: a.integer(),
       name: a.string(),
+      position: a.string(),
+      team: a.string(),
     })
     .authorization((allow) => [allow.publicApiKey()]),
 
     mlbTeam: a
+    .model({
+      id:a.integer(),
+      name:a.string(),
+    })
+    .authorization((allow) => [allow.publicApiKey()]),
+
+    mlbPlayerId: a
     .model({
       id:a.integer(),
       name:a.string(),
