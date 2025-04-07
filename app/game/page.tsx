@@ -24,6 +24,7 @@ export default function GamePage() {
   const [orderInput, setOrderInput] = useState<{ [key: string]: number }>({}); // Track inputs for order
   const [selectedUserTeam, setSelectedUserTeam] = useState<string | undefined>();
   const [selectedOpponentTeam, setSelectedOpponentTeam] = useState<string | undefined>();
+  const [lineup, setLineup] = useState<string[]>(new Array(9).fill("")); // Initialize the lineup array
 
   useEffect(() => {
     async function fetchPlayersAndTeams() {
@@ -36,7 +37,6 @@ export default function GamePage() {
   }, []);
 
   useEffect(() => {
-    // Reset the orderInput when player selection changes
     if (selectedPlayers.length === 0) {
       setOrderInput({});
       setPlayerOrder([]);
@@ -63,7 +63,6 @@ export default function GamePage() {
   }
 
   function handleOkayClick() {
-    // Validate the order (ensure all numbers from 1 to N are provided and unique)
     const orders = Object.values(orderInput);
     const uniqueOrders = new Set(orders);
     if (uniqueOrders.size !== orders.length) {
@@ -73,10 +72,16 @@ export default function GamePage() {
 
     const orderedPlayers = selectedPlayers
       .map((playerName) => ({ name: playerName, order: orderInput[playerName] }))
-      .sort((a, b) => a.order - b.order); // Sort based on the order
+      .sort((a, b) => a.order - b.order);
 
     setPlayerOrder(orderedPlayers);
     setIsOrdering(false); // Hide the ordering input
+  }
+
+  function handleLineupChange(index: number, playerName: string) {
+    const newLineup = [...lineup];
+    newLineup[index] = playerName;
+    setLineup(newLineup);
   }
 
   function handleTeamsSelection() {
@@ -85,28 +90,30 @@ export default function GamePage() {
       return;
     }
 
-    // Generate a random game ID
     const gameId = Math.random().toString(36).substring(2, 27); // 25 alphanumeric characters
 
     // Helper function to turn values into strings or default to " "
     const toStringOrEmpty = (value: any) => (value == null ? " " : String(value));
 
-    // Prepare the query parameters, ensuring everything is a string or empty space
     const query = new URLSearchParams({
       players: JSON.stringify(selectedPlayers),
       order: JSON.stringify(playerOrder),
+      lineup: JSON.stringify(lineup), // Include the lineup in the query
       userTeam: toStringOrEmpty(selectedUserTeam),
       opponentTeam: toStringOrEmpty(selectedOpponentTeam),
       gameId: toStringOrEmpty(gameId),
-    }).toString(); // Convert query parameters to a query string
+    }).toString();
 
-    // Navigate to the gameEntry page with the query string
     router.push(`/gameEntry?${query}`);
   }
 
   return (
     <main style={{ padding: "20px", maxWidth: "100vw", overflowX: "hidden" }}>
-      <h1>Game Setup</h1>
+  <h1>Game Setup</h1>
+
+  <div style={{ display: "flex", flexWrap: "wrap", gap: "40px" }}>
+    {/* Left Column: Player selection and ordering */}
+    <div style={{ flex: "1", minWidth: "300px" }}>
       <h2>Select up to 3 players</h2>
       <ul>
         {players.map((player) => (
@@ -116,7 +123,10 @@ export default function GamePage() {
                 type="checkbox"
                 checked={selectedPlayers.includes(player.name || "")}
                 onChange={() => togglePlayerSelection(player.name || "")}
-                disabled={selectedPlayers.length >= 3 && !selectedPlayers.includes(player.name || "")}
+                disabled={
+                  selectedPlayers.length >= 3 &&
+                  !selectedPlayers.includes(player.name || "")
+                }
               />
               {player.name || "Unknown Player"}
             </label>
@@ -155,10 +165,29 @@ export default function GamePage() {
           <button onClick={handleOkayClick}>Finalize Order</button>
         </div>
       )}
+    </div>
 
-      {/* Dropdowns for selecting user and opponent teams */}
+    {/* Right Column: Lineup and team selection */}
+    <div style={{ flex: "1", minWidth: "300px" }}>
       {playerOrder.length > 0 && (
-        <div>
+        <>
+          <h2>Enter Lineup</h2>
+          <p>Enter player names for each position in the lineup:</p>
+          <ul>
+            {new Array(9).fill(null).map((_, index) => (
+              <li key={index}>
+                <label>
+                  Position {index + 1}:
+                  <input
+                    type="text"
+                    value={lineup[index]}
+                    onChange={(e) => handleLineupChange(index, e.target.value)}
+                  />
+                </label>
+              </li>
+            ))}
+          </ul>
+
           <h2>Select Teams</h2>
           <div>
             <label>
@@ -176,8 +205,7 @@ export default function GamePage() {
               </select>
             </label>
           </div>
-          <br>
-          </br>
+          <br />
           <div>
             <label>
               Opponent Team:
@@ -194,9 +222,13 @@ export default function GamePage() {
               </select>
             </label>
           </div>
+
+          <br />
           <button onClick={handleTeamsSelection}>Start Game</button>
-        </div>
+        </>
       )}
-    </main>
+    </div>
+  </div>
+</main>
   );
 }

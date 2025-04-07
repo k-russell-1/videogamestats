@@ -9,8 +9,6 @@ import { useRouter } from "next/navigation";
 // Generate the client based on your schema
 const client = generateClient<Schema>();
 
-
-
 const GameEntryPageContent = () => {
   const searchParams = useSearchParams();
   const [gameData, setGameData] = useState<any>(null);
@@ -22,6 +20,10 @@ const GameEntryPageContent = () => {
   const [currentInning, setCurrentInning] = useState<number>(1); // Track the current inning
   const [userScore, setUserScore] = useState<number>(0); // User score
   const [opponentScore, setOpponentScore] = useState<number>(0); // Opponent score
+  const [rotationIndex, setRotationIndex] = useState<number>(0); // Track the current player index in the lineup
+  const [lineupIndexModNine, setLineupIndexModNine] = useState(1);  // Start at 1
+
+
 
   useEffect(() => {
     if (searchParams) {
@@ -29,6 +31,7 @@ const GameEntryPageContent = () => {
         gameId: searchParams.get("gameId"),
         players: JSON.parse(searchParams.get("players") as string),
         order: JSON.parse(searchParams.get("order") as string),
+        lineup: JSON.parse(searchParams.get("lineup") as string), // Add lineup from query params
         userTeam: searchParams.get("userTeam"),
         opponentTeam: searchParams.get("opponentTeam"),
       };
@@ -61,9 +64,13 @@ const GameEntryPageContent = () => {
 
   const handleOkClick = async () => {
     if (!gameData) return;
-
-    const playerName = gameData.order[currentPlayerIndex].name; // Current player at bat
+  
+    // Get the current player at bat
+    const playerName = gameData.order[currentPlayerIndex].name;
     const gameId = gameData.gameId;
+  
+    // Create a new index that loops through lineup (mod 9)
+    const playerLineupName = gameData.lineup[(lineupIndexModNine - 1) % 9];  // Subtract 1 to align with zero-based index
 
     try {
       // Fetch the player's ID from the playerId table
@@ -71,53 +78,65 @@ const GameEntryPageContent = () => {
         filter: { name: { eq: playerName } },
       });
       const playerData = playerResponse.data[0];
-
+  
       if (!playerData || !playerData.id) {
         console.error("Player ID not found");
         return;
       }
-
+  
       const playerId = playerData.id;
-
+  
       // Insert event into the mlbPlayerEvent table
       const response = await client.models.mlbPlayerEvent.create({
         game_id: gameId,
         player_id: playerId,
+        player_name: playerLineupName,  // Upload the player from the lineup at the mod 9 index
         isBatting: true,
         result: selectedResult,
         inning: currentInning, // Pass the current inning
         rbi: selectedRbi, // Pass the RBI value
       });
-
+  
       if (!response) {
         throw new Error("Failed to insert event");
       }
-
+  
       console.log("Event inserted successfully");
-
-      // Prepend the result to the battingResults array
+  
+      // Append the result to the battingResults array
       setBattingResults((prevResults) => {
         const newResults = [
-          { playerName, result: selectedResult, rbi: selectedRbi, inning: currentInning },
-          ...prevResults,
+          ...prevResults,  // Keep previous results in order
+          { playerName, result: selectedResult, rbi: selectedRbi, inning: currentInning },  // Add new result to the end
         ];
 
+        // Handle rotation behavior based on the number of rows
+        if (newResults.length <= 12) {
+            // If fewer than 12 rows, rotate the players as before
+            if (newResults.length > 12) {
+              setRotationIndex((prevRotationIndex) => (prevRotationIndex + 1) % gameData.lineup.length);
+            }
+          } else {
+            // When 12 or more rows exist, use the normal behavior for rotating the lineup
+            setRotationIndex((prevRotationIndex) => (prevRotationIndex + 5) % gameData.lineup.length);
+            newResults.shift(); // Remove the first result to keep the table size at 12
+          }
+  
         // Keep only the latest 12 rows
-        if (newResults.length > 12) {
-          newResults.pop(); // Remove the last element if there are more than 12
-        }
-
-        return newResults;
+        return newResults.slice(-12); // Ensure no more than 12 rows in the table
       });
-
-      // Move to the next player in the order
-      const nextPlayerIndex =
-        currentPlayerIndex === gameData.order.length - 1 ? 0 : currentPlayerIndex + 1;
+  
+      // Move to the next player in the batting order (currentPlayerIndex rotation logic stays the same)
+      const nextPlayerIndex = currentPlayerIndex === gameData.order.length - 1 ? 0 : currentPlayerIndex + 1;
       setCurrentPlayerIndex(nextPlayerIndex);
+
+      setLineupIndexModNine((prevIndex) => (prevIndex % 9) + 1); // Increment and wrap using mod 9 (1-9)
+  
     } catch (error) {
       console.error("Error inserting event:", error);
     }
   };
+
 
   const handleEndInning = () => {
     setCurrentInning((prevInning) => prevInning + 1);
@@ -165,7 +184,6 @@ const GameEntryPageContent = () => {
       alert("Failed to upload game results.");
     }
   };
-  
 
   if (!gameData) {
     return <div>Loading...</div>;
@@ -184,12 +202,20 @@ const GameEntryPageContent = () => {
             </li>
           ))}
         </ul>
-        <h3>Teams</h3>
-        <p>User Team: {gameData.userTeam}</p>
-        <p>Opponent Team: {gameData.opponentTeam}</p>
+        
+        {/* Add the table for the lineup here */}
+        <h3>Lineup</h3>
+<ul style={{ listStyleType: "none", paddingLeft: "0" }}>
+  {gameData.lineup.map((player: string, index: number) => (
+    <li key={index}>
+      Position {index + 1}: {player || "Not Set"}
+    </li>
+  ))}
+</ul>
+        
       </div>
       <div className="center-section">
-        <div className="at-bat-container">
+      <div className="at-bat-container">
           <span>{gameData.order[currentPlayerIndex].name} AB Result:</span>
           <select value={selectedResult} onChange={handleResultChange}>
             <option value="single">Single</option>
@@ -220,35 +246,46 @@ const GameEntryPageContent = () => {
           </button>
         </div>
 
+        
+
         <h3>Batting Results</h3>
         <table style={{ borderSpacing: "10px", borderCollapse: "collapse", width: "100%" }}>
-          <thead>
-            <tr>
-              <th style={{ padding: "8px 16px", textAlign: "left", backgroundColor: "#f4f4f4", fontWeight: "bold" }}>
-                Player
-              </th>
-              <th style={{ padding: "8px 16px", textAlign: "left", backgroundColor: "#f4f4f4", fontWeight: "bold" }}>
-                Result
-              </th>
-              <th style={{ padding: "8px 16px", textAlign: "left", backgroundColor: "#f4f4f4", fontWeight: "bold" }}>
-                RBI
-              </th>
-              <th style={{ padding: "8px 16px", textAlign: "left", backgroundColor: "#f4f4f4", fontWeight: "bold" }}>
-                Inning
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {battingResults.map((result, index) => (
-              <tr key={index}>
-                <td style={{ padding: "8px 16px", textAlign: "left" }}>{result.playerName}</td>
-                <td style={{ padding: "8px 16px", textAlign: "left" }}>{result.result}</td>
-                <td style={{ padding: "8px 16px", textAlign: "left" }}>{result.rbi}</td>
-                <td style={{ padding: "8px 16px", textAlign: "left" }}>{result.inning}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+  <thead>
+    <tr>
+      <th style={{ padding: "8px 16px", textAlign: "left", backgroundColor: "#f4f4f4", fontWeight: "bold" }}>
+        Player
+      </th>
+      <th style={{ padding: "8px 16px", textAlign: "left", backgroundColor: "#f4f4f4", fontWeight: "bold" }}>
+        Result
+      </th>
+      <th style={{ padding: "8px 16px", textAlign: "left", backgroundColor: "#f4f4f4", fontWeight: "bold" }}>
+        RBI
+      </th>
+      <th style={{ padding: "8px 16px", textAlign: "left", backgroundColor: "#f4f4f4", fontWeight: "bold" }}>
+        Inning
+      </th>
+      <th style={{ padding: "8px 16px", textAlign: "left", backgroundColor: "#f4f4f4", fontWeight: "bold" }}>
+        Hitter
+      </th>
+    </tr>
+  </thead>
+  <tbody>
+    {battingResults.map((result, index) => (
+      <tr key={index}>
+        <td style={{ padding: "8px 16px", textAlign: "left" }}>{result.playerName}</td>
+        <td style={{ padding: "8px 16px", textAlign: "left" }}>{result.result}</td>
+        <td style={{ padding: "8px 16px", textAlign: "left" }}>{result.rbi}</td>
+        <td style={{ padding: "8px 16px", textAlign: "left" }}>{result.inning}</td>
+        <td style={{ padding: "8px 16px", textAlign: "left" }}>
+          {/* Display the player from the lineup based on the rotation index */}
+          {gameData.lineup[(rotationIndex + index) % gameData.lineup.length] || "Not Set"}
+        </td>
+      </tr>
+    ))}
+  </tbody>
+</table>
+
+
 
         <button onClick={handleEndInning} style={{ marginTop: "20px" }}>
           End Inning
@@ -283,3 +320,10 @@ export default function GameEntryPage() {
     </Suspense>
   );
 }
+
+
+
+
+
+
+
